@@ -1,6 +1,6 @@
 # ai-tool-registry · Architecture (Architecture Overview)
 
-> **Excerpted from** `design/DESIGN.md` §1 Positioning and Boundaries · §2 List of Responsibilities · §3 Core Interface · §6 Adapter
+> **Excerpted from** `docs/DESIGN.md` §1 Positioning and Boundaries · §2 List of Responsibilities · §3 Core Interface · §6 Adapter
 > **Language · Framework**: Go · Gin + Cobra + Wire (DDD four layers; hot path can be Hertz/go-zero)
 > **Field**: agent-infra (Agent infrastructure layer · Tool registration center)
 > **optional**: false (core · core; the core of the Agent calling tool)
@@ -298,5 +298,5 @@ statement → JSON Schema check → Repository PG → can be AgentSpec Quote（�
 
 ---
 
-> **Associated documents**: This repository `design/DESIGN.md` · `skills/SKILLS.md` · `specs/SPECS.md`
+> **Associated documents**: This repository `docs/DESIGN.md` · `docs/SKILLS.md` · `docs/SPECS.md`
 > **Architecture Reference**: §4.3.2 (Tool Registry) · §7 (Skills/Rules/Specs Management) · §4.3.5 (AgentSpec Tool Binding) · §10.3 (ToolRegistry SPI) · §10.6 (Component Registry) · §15.5 (DDD Layering) · §16 (BOM)

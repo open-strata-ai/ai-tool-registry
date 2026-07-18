@@ -7,7 +7,7 @@
 > **Platform version**: v1.0.0
 > **Document Status**: Draft
 > **Responsible Person**: OpenStrata Architecture Group
-> **Associated links**: This repository [arch/ARCH.md](../../arch/ARCH.md) · [skills/SKILLS.md](../../skills/SKILLS.md) · [specs/SPECS.md](../../specs/SPECS.md); Architecture design document §4.3.2 (Tool Registration Center) · §7 (Skills/Rules/Specs Management) · §4.3.5 (AgentSpec Tool Binding) · §10.3 (ToolRegistry SPI) · §10.6 (Component Registry) · §15.5 (DDD Layering) · §16 (BOM)
+> **Associated links**: This repository [docs/ARCH.md](../../docs/ARCH.md) · [docs/SKILLS.md](../../docs/SKILLS.md) · [docs/SPECS.md](../../docs/SPECS.md); Architecture design document §4.3.2 (Tool Registration Center) · §7 (Skills/Rules/Specs Management) · §4.3.5 (AgentSpec Tool Binding) · §10.3 (ToolRegistry SPI) · §10.6 (Component Registry) · §15.5 (DDD Layering) · §16 (BOM)
 
 ---
 
