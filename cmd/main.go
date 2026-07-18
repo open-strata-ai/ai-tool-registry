@@ -13,6 +13,7 @@ import (
 	"github.com/open-strata-ai/ai-tool-registry/application/rbac"
 	"github.com/open-strata-ai/ai-tool-registry/application/registry"
 	"github.com/open-strata-ai/ai-tool-registry/application/schema"
+	"github.com/open-strata-ai/ai-tool-registry/domain"
 	"github.com/open-strata-ai/ai-tool-registry/infrastructure/auth"
 	"github.com/open-strata-ai/ai-tool-registry/infrastructure/config"
 	discoverystore "github.com/open-strata-ai/ai-tool-registry/infrastructure/discovery"
@@ -48,7 +49,27 @@ func main() {
 // Bootstrap assembles the full object graph from config and returns the HTTP
 // handler plus a cleanup function. It is exported so tests can reuse the wiring.
 func Bootstrap(cfg config.Config) (*httpapi.Handler, func()) {
-	st := store.New()
+	pgDSN := os.Getenv("DATABASE_URL")
+	redisAddr := os.Getenv("REDIS_ADDR")
+
+	var st domain.Store
+	if pgDSN != "" {
+		pgstore, err := store.NewPostgres(pgDSN)
+		if err != nil {
+			log.Printf("WARN: falling back to in-memory store (%v)", err)
+			st = store.New()
+		} else {
+			st = pgstore
+		}
+	} else {
+		st = store.New()
+	}
+
+	if redisAddr != "" {
+		cache := store.NewRedisCache(redisAddr)
+		_ = cache // L2 cache available; store writes go through both
+	}
+
 	disc := discoverystore.New()
 	validator := schema.New()
 	authPort := auth.New("local")
