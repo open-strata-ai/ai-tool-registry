@@ -6,6 +6,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	appmetering "github.com/open-strata-ai/ai-tool-registry/application/metering"
@@ -29,7 +30,10 @@ func main() {
 	h, closeFn := Bootstrap(cfg)
 	defer closeFn()
 
-	listen := "0.0.0.0:8080"
+	listen := os.Getenv("ADDR")
+	if listen == "" {
+		listen = "0.0.0.0:8080"
+	}
 	log.Printf("ai-tool-registry listening on %s", listen)
 	srv := &http.Server{
 		Addr:              listen,
