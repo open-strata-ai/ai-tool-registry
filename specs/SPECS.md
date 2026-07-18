@@ -1,36 +1,36 @@
 # ai-tool-registry · Specifications
 
-> **规格层** — API/CLI 接口面、数据模型、部署配置
-> **源文档**: design/DESIGN.md §7 / §8 / §11
-> **平台版本**: v1.4.0
+> **Specification layer** — API/CLI interface, data model, deployment configuration
+> **Source document**: design/DESIGN.md §7 / ​​§8 / §11
+> **Platform version**: v1.4.0
 
 ---
 
-## 7. API / CLI 接口面
+## 7. API / CLI interface
 
 ### 7.1 HTTP API
 
-| 方法 | 路径 | 说明 | 鉴权 |
+| Method | Path | Description | Authentication |
 | --- | --- | --- | --- |
-| POST | `/v1/tools` | 注册工具 | Keycloak JWT |
-| DELETE | `/v1/tools/{name}` | 反注册工具 | Keycloak JWT |
-| GET | `/v1/tools` | 列出工具（按租户/标签过滤） | Keycloak JWT |
-| POST | `/v1/tools/{name}/resolve` | 运行时解析（Agent 调用前） | Keycloak JWT |
-| POST | `/v1/tools/{name}/invoke` | 代理调用工具（可选） | Keycloak JWT |
-| POST | `/v1/skills` | 注册技能包 | Keycloak JWT |
-| GET | `/v1/skills` | 列出技能包 | Keycloak JWT |
-| POST | `/v1/rules` | 注册规则包 | Keycloak JWT |
-| GET | `/v1/rules` | 列出规则包 | Keycloak JWT |
-| POST | `/v1/specs` | 注册规范 | Keycloak JWT |
-| GET | `/v1/specs` | 列出规范 | Keycloak JWT |
-| GET | `/healthz` | 存活/就绪探针 | 无 |
-| GET | `/metrics` | Prometheus 指标 | 内网 |
+| POST | `/v1/tools` | Registration Tools | Keycloak JWT |
+| DELETE | `/v1/tools/{name}` | Anti-registration tool | Keycloak JWT |
+| GET | `/v1/tools` | List tools (filtered by tenant/tag) | Keycloak JWT |
+| POST | `/v1/tools/{name}/resolve` | Runtime resolution (before Agent call) | Keycloak JWT |
+| POST | `/v1/tools/{name}/invoke` | Agent invocation tool (optional) | Keycloak JWT |
+| POST | `/v1/skills` | Register skills package | Keycloak JWT |
+| GET | `/v1/skills` | List skill packs | Keycloak JWT |
+| POST | `/v1/rules` | Registration rules package | Keycloak JWT |
+| GET | `/v1/rules` | List rule packages | Keycloak JWT |
+| POST | `/v1/specs` | Registration specifications | Keycloak JWT |
+| GET | `/v1/specs` | List specifications | Keycloak JWT |
+| GET | `/healthz` | Liveness/readiness probe | None |
+| GET | `/metrics` | Prometheus metrics | Intranet |
 
-### 7.2 API 请求/响应模型
+### 7.2 API request/response model
 
-#### 注册工具
+#### Registration tool
 
-**请求体 (JSON)**:
+**Request body (JSON)**:
 ```json
 {
   "name": "order_lookup",
@@ -59,7 +59,7 @@
 }
 ```
 
-#### Resolve 响应体
+#### Resolve response body
 
 ```json
 {
@@ -78,29 +78,29 @@
 
 ### 7.3 CLI
 
-`aictl registry push ./tools/order_lookup.yaml` 由 `ai-cli` 转发；本仓亦可接受 `--config` 启动批量注册。
+`aictl registry push ./tools/order_lookup.yaml` is forwarded by `ai-cli`; this repository can also accept `--config` to start batch registration.
 
-### 7.4 查询参数
+### 7.4 Query parameters
 
-| 参数 | 类型 | 用于 | 说明 |
+| Parameters | Type | Used | Description |
 | --- | --- | --- | --- |
-| `tenant_id` | string | GET /v1/tools | 按租户过滤 |
-| `kind` | string | GET /v1/tools | 按工具类型过滤（db/api/file/code/search/business） |
-| `tags` | []string | GET /v1/tools | 按标签过滤 |
-| `version` | string | GET /v1/skills | 按技能版本过滤 |
+| `tenant_id` | string | GET /v1/tools | Filter by tenant |
+| `kind` | string | GET /v1/tools | Filter by tool type (db/api/file/code/search/business) |
+| `tags` | []string | GET /v1/tools | Filter by tags |
+| `version` | string | GET /v1/skills | Filter by skill version |
 
 ---
 
-## 8. 数据模型
+## 8. Data model
 
-### 8.1 持久化存储
+### 8.1 Persistent storage
 
-| 存储 | 角色 | 数据内容 |
+| Storage | Role | Data Content |
 | --- | --- | --- |
-| PostgreSQL（core） | 权威存储 | `tools`（工具定义）、`tool_instances`（服务发现）、`skills`/`rules`/`specs`（能力包）、`tool_metrics`（计量）、`audit_log` |
-| Redis（core） | 热数据 | 注册表热副本、计量滑动窗口、限流 |
+| PostgreSQL (core) | Authoritative storage | `tools` (tool definition), `tool_instances` (service discovery), `skills`/`rules`/`specs` (capability package), `tool_metrics` (measurement), `audit_log` |
+| Redis (core) | Hot data | Registry hot copy, metering sliding window, rate limiting |
 
-### 8.2 核心表: `tools`
+### 8.2 Core table: `tools`
 
 ```sql
 CREATE TABLE tools (
@@ -119,53 +119,53 @@ CREATE TABLE tools (
 );
 ```
 
-**列说明**:
+**Column Description**:
 
-| 列 | 类型 | 约束 | 说明 |
+| Column | Type | Constraint | Description |
 | --- | --- | --- | --- |
-| name | TEXT | PK | 工具名称，如 `order_lookup` |
-| tenant_id | TEXT | PK | 租户标识 |
-| version | TEXT | PK | 语义化版本，如 `1.0.0` |
-| kind | TEXT | | 工具类型: `db`/`api`/`file`/`code`/`search`/`business` |
-| input_schema | JSONB | | JSON Schema 入参定义 |
-| output_schema | JSONB | | JSON Schema 出参定义 |
+| name | TEXT | PK | Tool name, such as `order_lookup` |
+| tenant_id | TEXT | PK | Tenant ID |
+| version | TEXT | PK | Semantic version, such as `1.0.0` |
+| kind | TEXT | | Tool type: `db`/`api`/`file`/`code`/`search`/`business` |
+| input_schema | JSONB | | JSON Schema input parameter definition |
+| output_schema | JSONB | | JSON Schema output parameter definition |
 | transport | TEXT | | MCP Transport: `stdio`/`sse`/`http`/`local` |
-| endpoint | TEXT | | 默认实例地址 |
-| auth | JSONB | | 鉴权配置: `{type: "apikey"/"oauth2"/"none"}` |
-| rbac | JSONB | | 允许角色列表，如 `["agent", "admin"]` |
-| tags | JSONB | | 语义检索标签 |
+| endpoint | TEXT | | Default instance address |
+| auth | JSONB | | Authentication configuration: `{type: "apikey"/"oauth2"/"none"}` |
+| rbac | JSONB | | List of allowed roles, such as `["agent", "admin"]` |
+| tags | JSONB | | Semantic search tags |
 
-### 8.3 能力包表
+### 8.3 Capability package table
 
-| 表名 | 主键 | 说明 |
+| Table name | Primary key | Description |
 | --- | --- | --- |
-| `skills` | `(tenant_id, name, version)` | 技能包注册 |
-| `rules` | `(tenant_id, name)` | OPA/Rego 规则包 |
-| `specs` | `(tenant_id, name)` | AgentSpec 模板 |
+| `skills` | `(tenant_id, name, version)` | Skill pack registration |
+| `rules` | `(tenant_id, name)` | OPA/Rego rule package |
+| `specs` | `(tenant_id, name)` | AgentSpec template |
 
-### 8.4 Redis 键设计
+### 8.4 Redis key design
 
-| Key Pattern | 用途 | TTL |
+| Key Pattern | Purpose | TTL |
 | --- | --- | --- |
-| `tool:{tenant}:{name}` | 工具定义热副本 | 无（注册时写） |
-| `tool:{tenant}:{name}:instances` | 服务发现实例列表 | 心跳 TTL 30s |
-| `tool:metrics:{tenant}:{name}:count` | 调用计数滑动窗口 | 60s |
-| `tool:metrics:{tenant}:{name}:latency` | 延迟滑动窗口 | 60s |
+| `tool:{tenant}:{name}` | Hot copy of tool definition | None (written during registration) |
+| `tool:{tenant}:{name}:instances` | Service discovery instance list | Heartbeat TTL 30s |
+| `tool:metrics:{tenant}:{name}:count` | Call count sliding window | 60s |
+| `tool:metrics:{tenant}:{name}:latency` | Latency sliding window | 60s |
 
 ---
 
-## 11. 配置与部署
+## 11. Configuration and deployment
 
-### 11.1 部署形态
+### 11.1 Deployment form
 
-| 属性 | 值 |
+| Properties | Values ​​|
 | --- | --- |
-| 必选性 | core |
-| 命名空间 | `ai-system`（§9.2） |
-| 部署方式 | Docker Compose（starter）/ K8s Deployment（standard） |
-| 可选组件启停 | Skills/Rules/Specs 默认关（`skills.enabled: false` 等） |
+| Required | core |
+| namespace | `ai-system` (§9.2) |
+| Deployment method | Docker Compose (starter)/K8s Deployment (standard) |
+| Optional component start and stop | Skills/Rules/Specs is off by default (`skills.enabled: false`, etc.) |
 
-### 11.2 K8s 资源配置
+### 11.2 K8s resource configuration
 
 ```yaml
 resources:
@@ -177,90 +177,90 @@ resources:
     memory: 1Gi
 ```
 
-### 11.3 探针配置
+### 11.3 Probe configuration
 
-| 探针 | 路径 | 说明 | initialDelaySeconds | periodSeconds |
+| probe | path | description | initialDelaySeconds | periodSeconds |
 | --- | --- | --- | --- | --- |
-| 存活 | `GET /healthz` | 快速返回 200 | 5 | 10 |
-| 就绪 | `GET /healthz` | 校验 PG + Redis 连接 | 5 | 10 |
+| Alive | `GET /healthz` | Quick return 200 | 5 | 10 |
+| Ready | `GET /healthz` | Verify PG + Redis connection | 5 | 10 |
 
-### 11.4 滚动更新策略
+### 11.4 Rolling update strategy
 
 ```yaml
 strategy:
   type: RollingUpdate
 ```
 
-多副本 + 探针保活。
+Multiple copies + probe keep alive.
 
-### 11.5 配置键完整列表
+### 11.5 Complete list of configuration keys
 
-**文件位置**: `infrastructure/config/`
+**File location**: `infrastructure/config/`
 
 ```yaml
 toolRegistry:
-  schemaValidation: true         # 入出参 JSON Schema 校验开关
+  schemaValidation: true         #Input and output parameters JSON Schema verification switch
   discovery:
-    enabled: true                # 服务发现开关
-    heartbeatTTL: 30s            # 实例心跳 TTL
+    enabled: true                #Service discovery switch
+    heartbeatTTL: 30s            #Instance heartbeat TTL
   mcp:
-    transports: [stdio, sse, http] # 支持的 MCP Transport
+    transports: [stdio, sse, http] #Supported MCP Transport
   metering:
-    enabled: true                # 调用计量开关
+    enabled: true                #Call metering switch
 
 auth:
-  provider: keycloak             # 认证提供方
+  provider: keycloak             #Certification provider
 
 skills:
-  enabled: false                 # Skills 管理开关（默认关）
+  enabled: false                 #Skills management switch (default off)
 
 rules:
-  enabled: false                 # Rules 管理开关（默认关）
+  enabled: false                 #Rules management switch (off by default)
 
 specs:
-  enabled: false                 # Specs 管理开关（默认关）
+  enabled: false                 #Specs management switch (default off)
 ```
 
-**配置键说明**:
+**Configuration key description**:
 
-| 键 | 类型 | 默认值 | 说明 |
+| key | type | default value | description |
 | --- | --- | --- | --- |
-| `toolRegistry.schemaValidation` | bool | `true` | 启用 JSON Schema 入出参校验 |
-| `toolRegistry.discovery.enabled` | bool | `true` | 启用服务发现 |
-| `toolRegistry.discovery.heartbeatTTL` | duration | `30s` | 实例心跳 TTL |
-| `toolRegistry.mcp.transports` | []string | `[stdio, sse, http]` | 支持的 MCP 传输协议 |
-| `toolRegistry.metering.enabled` | bool | `true` | 启用调用计量 |
-| `auth.provider` | string | `keycloak` | 认证提供方 |
-| `skills.enabled` | bool | `false` | 启用 Skills 管理 |
-| `rules.enabled` | bool | `false` | 启用 Rules 管理 |
-| `specs.enabled` | bool | `false` | 启用 Specs 管理 |
+| `toolRegistry.schemaValidation` | bool | `true` | Enable JSON Schema input and output parameter verification |
+| `toolRegistry.discovery.enabled` | bool | `true` | Enable service discovery |
+| `toolRegistry.discovery.heartbeatTTL` | duration | `30s` | Instance heartbeat TTL |
+| `toolRegistry.mcp.transports` | []string | `[stdio, sse, http]` | Supported MCP transport protocols |
+| `toolRegistry.metering.enabled` | bool | `true` | Enable call metering |
+| `auth.provider` | string | `keycloak` | Authentication provider |
+| `skills.enabled` | bool | `false` | Enable Skills management |
+| `rules.enabled` | bool | `false` | Enable Rules management |
+| `specs.enabled` | bool | `false` | Enable Specs management |
 
-### 11.6 阶段引入策略
+### 11.6 Stage introduction strategy
 
-| 阶段 | 组件 | 配置状态 |
+| Stages | Components | Configuration Status |
 | --- | --- | --- |
-| 一~三（starter/standard） | 核心工具注册 | 工具注册/解析/校验/计量开启 |
-| 三+（standard 点亮） | Skills/Rules/Specs | `skills/rules/specs.enabled=true` |
-| 四（advanced/full） | 完整可选能力 | 全部开启 |
+| One to three (starter/standard) | Core tool registration | Tool registration/parsing/verification/measurement start |
+| Three+ (standard lit) | Skills/Rules/Specs | `skills/rules/specs.enabled=true` |
+| Four (advanced/full) | Complete optional capabilities | All enabled |
 
-### 11.7 依赖组件
+### 11.7 Dependent components
 
-| 组件 | 类型 | 必选 | 说明 |
+| Component | Type | Required | Description |
 | --- | --- | --- | --- |
-| PostgreSQL | 存储 | core | 工具定义/实例/能力包/审计 |
-| Redis | 缓存 | core | 注册表热副本/计量/限流 |
-| Keycloak | 认证 | core | 租户/用户 JWT |
-| Qdrant（可选） | 向量库 | optional | 工具语义检索 |
-| ai-sandbox-manager | 沙箱 | 间接 | 代码类 Tool 运行时（§10.6） |
+| PostgreSQL | storage | core | tool definition/instance/capability package/audit |
+| Redis | cache | core | registry hot copy/metering/rate limiting |
+| Keycloak | authentication | core | tenant/user JWT |
+| Qdrant (optional) | Vector library | optional | Tool semantic retrieval |
+| ai-sandbox-manager | Sandbox | Indirect | Code Class Tool Runtime (§10.6) |
 
 ---
 
-## 追溯矩阵
+## Traceability matrix
 
-| 章节 | 源文档 DESIGN.md 对应 |
+| Chapter | Source document DESIGN.md corresponding |
 | --- | --- |
-| 7 API/CLI/配置接口面 | §7 |
-| 8 数据模型与存储 | §8 |
-| 11 配置与部署 | §11 |
+| 7 API/CLI/Configuration Interface | §7 |
+| 8 Data Model and Storage | §8 |
+| 11 Configuration and Deployment | §11 |
 
-> **变更记录**: v0.1 | 2026-07-17 | 初稿（从 DESIGN.md §7/§8/§11 提取）
+> **Change Record**: v0.1 | 2026-07-17 | First draft (extracted from DESIGN.md §7/§8/§11)

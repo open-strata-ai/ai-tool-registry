@@ -1,49 +1,49 @@
-# ai-tool-registry · 详细设计
+# ai-tool-registry · Detailed design
 
 > **repo**: ai-tool-registry
-> **语言·框架**: Go · Gin + Cobra + Wire（DDD 四层；热路径可上 Hertz/go-zero）
-> **领域**: agent-infra（Agent 基础设施层 · 工具注册中心）
-> **optional**: false（核心 · core，Agent 调用工具的核心）
-> **平台版本**: v1.4.0
-> **文档状态**: 草稿
-> **负责人**: OpenStrata 架构组
-> **关联链接**: 本仓 [arch/ARCH.md](../../arch/ARCH.md) · [skills/SKILLS.md](../../skills/SKILLS.md) · [specs/SPECS.md](../../specs/SPECS.md) ；架构设计文档 §4.3.2（工具注册中心）· §7（Skills/Rules/Specs 管理）· §4.3.5（AgentSpec 工具绑定）· §10.3（ToolRegistry SPI）· §10.6（Component Registry）· §15.6（DDD 分层）· §16（BOM）
+> **Language · Framework**: Go · Gin + Cobra + Wire (DDD four layers; hot path can be Hertz/go-zero)
+> **Field**: agent-infra (Agent infrastructure layer · Tool registration center)
+> **optional**: false (core · core, the core of the Agent calling tool)
+> **Platform version**: v1.4.0
+> **Document Status**: Draft
+> **Responsible Person**: OpenStrata Architecture Group
+> **Associated links**: This repository [arch/ARCH.md](../../arch/ARCH.md) · [skills/SKILLS.md](../../skills/SKILLS.md) · [specs/SPECS.md](../../specs/SPECS.md); Architecture design document §4.3.2 (Tool Registration Center) · §7 (Skills/Rules/Specs Management) · §4.3.5 (AgentSpec Tool Binding) · §10.3 (ToolRegistry SPI) · §10.6 (Component Registry) · §15.5 (DDD Layering) · §16 (BOM)
 
 ---
 
-## 1. 定位与边界（Scope）
+## 1. Positioning and Boundary (Scope)
 
-`ai-tool-registry` 是 OpenStrata 的**工具注册中心**，承载 §4.3.2「工具注册中心」与 §7「Skills / Rules / Specs 管理平台」。它统一管理 Agent 可调用的**工具（Tool）**与**能力包（Skills / Rules / Specs）**的注册、Schema 校验、服务发现、鉴权与调用计量，是 Agent 经 `ToolRegistry` SPI 调用外部能力的唯一治理面。
+`ai-tool-registry` is the **tool registry** of OpenStrata, hosting §4.3.2 "Tool Registration Center" and §7 "Skills / Rules / Specs Management Platform". It uniformly manages the registration, Schema verification, service discovery, authentication and call metering of Tools and Skills/Rules/Specs that can be called by Agent. It is the only management surface for Agent to call external capabilities through `ToolRegistry` SPI.
 
-- **本仓解决的唯一问题**：把"分散在各处的工具（DB/API/文件/代码/搜索/业务）"与"平台级能力包（Skill/Rule/Spec）"收敛为**可声明、可校验、可发现、可治理**的注册表，让 Agent 运行时按 `tool_bindings`（§4.3.5）统一取用。
-- **必选性**：core（推荐，§10.2「工具注册中心」）。Agent 无法调用工具时无此组件则不可用；纯 API 网关场景可省，但标准部署默认开。
-- **与其他 Go 组件的分工**：
-  - **vs ai-gateway-core**：网关负责"模型调用"数据面；本仓负责"工具调用"治理面。二者在链路中串联：Agent 调用工具 → 本仓解析/鉴权/计量 → 工具实现（可能再经网关调模型）。
-  - **vs ai-sandbox-manager**：执行代码的 `Tool`（如代码工具）经本仓注册后，运行时由 `SandboxExecutor` 承载（§10.6 依赖规则 `Tool → SandboxExecutor`）；本仓不执行代码，只登记与路由。
-  - **vs ai-platform-api**：控制面做租户/用户级授权汇总；本仓做工具级 RBAC 与实例发现。
-  - **vs ai-cli**：`aictl` 通过本仓 API 注册/查询工具与能力包。
+- **The only problem solved by this repository**: Converging "tools (DB/API/File/Code/Search/Business) scattered everywhere" and "Platform-level capability packages (Skill/Rule/Spec)" into a **declarable, verifiable, discoverable, and manageable** registry, so that the Agent can access them uniformly according to `tool_bindings` (§4.3.5) when running.
+- **Required**: core (recommended, §10.2 "Tool Registration Center"). This component is not available when the Agent cannot call the tool; it can be omitted in pure API gateway scenarios, but it is enabled by default in standard deployment.
+- **Division of labor with other Go components**:
+- **vs ai-gateway-core**: The gateway is responsible for the "model calling" data side; the repository is responsible for the "tool calling" management side. The two are connected in series in the link: Agent calls the tool → own repository analysis/authentication/measurement → tool implementation (may then adjust the model through the gateway).
+- **vs ai-sandbox-manager**: After the `Tool` (such as code tool) that executes the code is registered in this repository, the runtime is carried by `SandboxExecutor` (§10.6 Dependency rule `Tool → SandboxExecutor`); this repository does not execute the code, only registration and routing.
+- **vs ai-platform-api**: The control plane does tenant/user-level authorization summary; this repository does tool-level RBAC and instance discovery.
+- **vs ai-cli**: `aictl` registers/queries tools and capability packages through the repository API.
 
 ---
 
-## 2. 职责清单
+## 2. Responsibilities List
 
-| # | 职责 | 必选/可选 | 说明 |
+| # | Responsibilities | Required/Optional | Description |
 | --- | --- | --- | --- |
-| R1 | 工具注册 / 反注册 | core | YAML/JSON 声明工具 Schema，自动生成调用契约（§4.3.2） |
-| R2 | Schema 校验 | core（推荐） | 入参/出参 JSON Schema 校验（§4.3.2） |
-| R3 | 服务发现 | optional | 工具实例自动注册、负载均衡 |
-| R4 | 工具鉴权（RBAC） | optional（单用户可跳过） | 工具级 API Key / OAuth2（§4.3.2） |
-| R5 | 调用计量 | optional | 调用次数、延迟、成功率（§4.3.2） |
-| R6 | Skills 管理 | optional（默认关） | 技能包注册/版本/绑定（§7.2） |
-| R7 | Rules 管理 | optional（默认关） | OPA/Rego 规则包注册（§7.3） |
-| R8 | Specs 管理 | optional（默认关） | AgentSpec 模板 / 规范注册（§7.4，§4.3.5） |
-| R9 | MCP 协议接入 | 随工具注册 | stdio / SSE / HTTP 三种 Transport（§4.3.2） |
+| R1 | Tool registration/de-registration | core | YAML/JSON declaration tool Schema, automatically generate call contract (§4.3.2) |
+| R2 | Schema verification | core (recommended) | Input/output JSON Schema verification (§4.3.2) |
+| R3 | Service discovery | optional | Automatic registration of tool instances, load balancing |
+| R4 | Tool Authentication (RBAC) | optional (can be skipped by single user) | Tool-level API Key / OAuth2 (§4.3.2) |
+| R5 | Call metering | optional | Number of calls, delay, success rate (§4.3.2) |
+| R6 | Skills management | optional (default off) | Skill package registration/version/binding (§7.2) |
+| R7 | Rules management | optional (default off) | OPA/Rego rule package registration (§7.3) |
+| R8 | Specs Management | optional (default off) | AgentSpec Template/Specification Registration (§7.4, §4.3.5) |
+| R9 | MCP protocol access | Register with the tool | stdio / SSE / HTTP three transports (§4.3.2) |
 
 ---
 
-## 3. 核心抽象与接口（core interfaces / 类型定义）
+## 3. Core abstraction and interface (core interfaces / type definition)
 
-领域层（§15.6.2 `domain/`）定义 `ToolRegistry` Port 与能力包实体。
+The domain layer (§15.5.2 `domain/`) defines the `ToolRegistry` Port and capability package entities.
 
 ```go
 package domain
@@ -58,22 +58,22 @@ type ToolRegistry interface {
 }
 
 type ToolDefinition struct {
-    Name        string            `json:"name"`         // 唯一，如 order_lookup
+    Name        string            `json:"name"`         //Unique, such as order_lookup
     Version     string            `json:"version"`
     Kind        string            `json:"kind"`         // db|api|file|code|search|business
     TenantID    string            `json:"tenant_id"`
     InputSchema map[string]any    `json:"input_schema"` // JSON Schema
     OutputSchema map[string]any   `json:"output_schema"`
     Transport   string            `json:"transport"`    // stdio|sse|http|local
-    Endpoint    string            `json:"endpoint"`     // 实例地址（服务发现填充）
+    Endpoint    string            `json:"endpoint"`     //Instance address (populated by service discovery)
     Auth        ToolAuth          `json:"auth"`         // apikey|oauth2|none
-    RBAC        []string          `json:"rbac"`         // 允许 role
-    CapabilityTags []string       `json:"tags"`         // 语义检索
+    RBAC        []string          `json:"rbac"`         //allow role
+    CapabilityTags []string       `json:"tags"`         //Semantic retrieval
 }
 
 type ResolvedTool struct {
     Def     ToolDefinition
-    Instances []ToolInstance  // 服务发现得到的多实例（负载均衡）
+    Instances []ToolInstance  //Multiple instances obtained by service discovery (load balancing)
 }
 
 type ToolInstance struct {
@@ -82,100 +82,100 @@ type ToolInstance struct {
     Weight   int
 }
 
-// ===== 能力包实体（§7）=====
+//===== Capability Package Entity (§7) =====
 type Skill struct { ID string; Name string; Version string; Manifest map[string]any; TenantID string }
 type Rule  struct { ID string; Name string; PolicyRego string; Severity string; TenantID string } // OPA/Rego
-type Spec  struct { ID string; Name string; AgentSpecRef string; TenantID string }                 // 引用 §4.3.5 AgentSpec
+type Spec  struct { ID string; Name string; AgentSpecRef string; TenantID string }                 //Quote §4.3.5 AgentSpec
 ```
 
 ---
 
-## 4. 处理流水线 / 请求路径
+## 4. Processing pipeline/request path
 
-工具调用的治理路径（以 Agent 调用 `order_lookup` 为例）：
+Management path of tool call (take Agent calling `order_lookup` as an example):
 
 ```mermaid
 flowchart TD
-    A[Agent 运行时 / ai-platform-api] -->|"Resolve(name,tenant)"| B[ai-tool-registry 接入层]
-    B --> C[租户上下文 + 工具级 RBAC 校验]
-    C -->|"无权"| DENY[拒绝 403]
-    C -->|"通过"| E[Schema 校验入参]
-    E -->|"非法"| BAD[400 + 错误明细]
-    E -->|"合法"| F[服务发现: 取健康实例]
-    F --> G[负载均衡选实例]
-    G --> H[经 MCP Transport 调工具实现<br/>stdio/SSE/HTTP]
-    H --> I[调用计量: 次数/延迟/成功率]
-    I --> J[出参 Schema 校验]
-    J --> K[返回结果 + 审计]
+    A[Agent runtime / ai-platform-api] -->|"Resolve(name,tenant)"| B[ai-tool-registry access layer]
+    B --> C[Tenant context + Tool level RBAC check]
+    C -->|"no rights"| DENY[reject 403]
+    C -->|"pass"| E[Schema Verify input parameters]
+    E -->|"illegal"| BAD[400 + Error details]
+    E -->|"legitimate"| F[service discovery: Take healthy example]
+    F --> G[Load balancing instance selection]
+    G --> H[through MCP Transport Tuning tool implementation<br/>stdio/SSE/HTTP]
+    H --> I[call metering: frequency/Delay/success rate]
+    I --> J[Take out the ginseng Schema check]
+    J --> K[Return results + audit]
 ```
 
-> 能力包（Skill/Rule/Spec）注册路径为「声明 → 校验 → 入库 → 可被 AgentSpec 引用」，不走运行时调用链路（§7）。
+> The registration path of the capability package (Skill/Rule/Spec) is "Declaration → Verification → Into the library → Can be referenced by AgentSpec", and does not use the runtime call link (§7).
 
 ---
 
-## 5. 关键算法 / 逻辑
+## 5. Key algorithm/logic
 
-### 5.1 工具解析与路由
-`Resolve(name, tenant)`：先按 `tenant_id` + `name` 定位 `ToolDefinition`，再据 `RBAC` 校验 caller role，最后从 `service_discovery` 取健康实例并按 `Weight` 加权随机/轮询选实例。
+### 5.1 Tool parsing and routing
+`Resolve(name, tenant)`: First locate the `ToolDefinition` according to `tenant_id` + `name`, then verify the caller role according to `RBAC`, and finally get the healthy instance from `service_discovery` and select the instance randomly/polling according to `Weight`.
 
-### 5.2 Schema 校验
-入参/出参用 JSON Schema（gojsonschema）校验；非法入参在网关/注册中心边界即拦截，避免污染工具实现（§4.3.2「Schema 校验推荐」）。
+### 5.2 Schema verification
+Input/output parameters are verified using JSON Schema (gojsonschema); illegal input parameters are intercepted at the gateway/registration center boundary to avoid contaminating the tool implementation (§4.3.2 "Schema Verification Recommendation").
 
-### 5.3 服务发现
-工具实例以心跳注册到注册表（或对接 K8s Endpoints）；周期性健康探测剔除不健康实例；支持多实例负载均衡（optional）。
+### 5.3 Service Discovery
+Tool instances are registered in the registry (or connected to K8s Endpoints) with heartbeats; periodic health detection eliminates unhealthy instances; multi-instance load balancing (optional) is supported.
 
-### 5.4 能力包版本与引用
-- **Skill**：按 `name+version` 不可变存储，AgentSpec 引用 `skill_ref` 取最新兼容版本（语义化）。
-- **Rule**：存储 OPA/Rego 文本，提供 `Evaluate(input)` 沙箱执行（§7.3）。
-- **Spec**：存储 AgentSpec 模板（§4.3.5），供低代码画布/构建路径引用收敛。
+### 5.4 Capability package version and reference
+- **Skill**: Press `name+version` for immutable storage, AgentSpec refers to `skill_ref` to get the latest compatible version (semantic).
+- **Rule**: Stores OPA/Rego text, providing `Evaluate(input)` sandbox execution (§7.3).
+- **Spec**: Stores AgentSpec templates (§4.3.5) for low-code canvas/build path reference convergence.
 
 ---
 
-## 6. 与外部系统/组件的适配（OSS / SPI Adapter）
+## 6. Adaptation with external systems/components (OSS/SPI Adapter)
 
-| SPI 端口 | 本仓角色 | 外部组件 | 默认 ✅ / 备选 | Adapter |
+| SPI port | Role of this repository | External components | Default ✅ / Alternative | Adapter |
 | --- | --- | --- | --- | --- |
-| `ToolRegistry` | 实现方 | 本仓自身（无外部 SPI 实例，属平台自研 Port） | — | MCP 协议接入（stdio/SSE/HTTP） |
-| `VectorStore` (1.1.0) | 消费方（可选） | Qdrant（core）/ Milvus（optional） | ✅ / 备选 | 工具语义检索/标签向量化（可选增强） |
-| `Cache` (1.0.0) | 消费方 | Redis（core）/ Valkey（optional） | ✅ / 备选 | 注册表热副本、计量计数 |
-| `Auth` (1.0.0) | 消费方 | Keycloak（core） | ✅ | 租户/用户身份 |
-| `Sandbox` (1.0.0) | 间接依赖 | Kata/E2B（optional） | 备选 | 代码类 Tool 运行时经 `SandboxExecutor`（§10.6 依赖规则） |
+| `ToolRegistry` | Implementer | This repository itself (no external SPI instance, self-developed port of the platform) | — | MCP protocol access (stdio/SSE/HTTP) |
+| `VectorStore` (1.1.0) | Consumer (optional) | Qdrant (core) / Milvus (optional) | ✅ / Alternative | Tool semantic retrieval/tag vectorization (optional enhancement) |
+| `Cache` (1.0.0) | Consumer | Redis (core) / Valkey (optional) | ✅ / Alternative | Registry hot copy, metering count |
+| `Auth` (1.0.0) | Consumer | Keycloak (core) | ✅ | Tenant/User Identity |
+| `Sandbox` (1.0.0) | Indirect dependency | Kata/E2B (optional) | Alternative | Code class Tool runs through `SandboxExecutor` (§10.6 Dependency rules) |
 
-> `ToolRegistry` 在 bom.yaml 的 15 个 SPI 端口中**无对应外部实例**（属平台自研 Port），其"多实现"体现为**同一工具的多实例并存**（服务发现），而非外部组件替换（§10.3、§10.4）。防腐层：MCP 三种 Transport 的差异在 Adapter 内收敛为统一 `ResolvedTool` 调用。
+> `ToolRegistry` has no corresponding external instance** among the 15 SPI ports in bom.yaml (it is a self-developed port on the platform). Its "multiple implementations" are reflected in **the coexistence of multiple instances of the same tool** (service discovery), rather than external component replacement (§10.3, §10.4). Anti-corrosion layer: The differences between the three MCP Transports are converged into a unified `ResolvedTool` call in the Adapter.
 
 ---
 
-## 7. API / CLI / 配置接口面
+## 7. API / CLI / Configuration interface
 
 ### 7.1 HTTP API（Gin）
 ```
-POST /v1/tools                 # 注册工具
-DELETE /v1/tools/{name}        # 反注册
-GET  /v1/tools                 # 列出（按租户/标签过滤）
-POST /v1/tools/{name}/resolve  # 运行时解析（Agent 调用前）
-POST /v1/tools/{name}/invoke   # 代理调用（可选；或直接由调用方直连实例）
-POST /v1/skills  GET /v1/skills       # Skills 管理（§7.2）
-POST /v1/rules   GET /v1/rules        # Rules 管理（§7.3）
-POST /v1/specs   GET /v1/specs        # Specs 管理（§7.4）
+POST /v1/tools                 #Registration tool
+DELETE /v1/tools/{name}        #Anti-registration
+GET  /v1/tools                 #List (filtered by tenant/tag)
+POST /v1/tools/{name}/resolve  #Runtime parsing (before Agent call)
+POST /v1/tools/{name}/invoke   #Proxy call (optional; or directly connected to the instance by the caller)
+POST /v1/skills  GET /v1/skills       #Skills Management (§7.2)
+POST /v1/rules   GET /v1/rules        #Rules management (§7.3)
+POST /v1/specs   GET /v1/specs        #Specs Management (§7.4)
 GET  /healthz  /metrics
 ```
-### 7.2 CLI（可选，运维/声明式）
-`aictl registry push ./tools/order_lookup.yaml` 形式（由 `ai-cli` 转发）；本仓亦可接受 `--config` 启动批量注册。
-### 7.3 配置片段（本仓 `infrastructure/config/`）
+### 7.2 CLI (optional, operation/declarative)
+`aictl registry push ./tools/order_lookup.yaml` format (forwarded by `ai-cli`); this repository can also accept `--config` to start batch registration.
+### 7.3 Configuration fragment (this repository `infrastructure/config/`)
 ```yaml
 toolRegistry:
-  schemaValidation: true        # 入出参 JSON Schema
+  schemaValidation: true        #Input and output parameters JSON Schema
   discovery:
-    enabled: true               # 服务发现
+    enabled: true               #service discovery
     heartbeatTTL: 30s
   mcp:
     transports: [stdio, sse, http]
   metering:
-    enabled: true               # 调用计量
+    enabled: true               #call metering
 auth:
   provider: keycloak
 skills:
-  enabled: false                # optional 默认关（§10.2）
+  enabled: false                #optional default off (§10.2)
 rules:
   enabled: false
 specs:
@@ -184,11 +184,11 @@ specs:
 
 ---
 
-## 8. 数据模型与存储
+## 8. Data model and storage
 
-持久化（base/core）：
-- **PostgreSQL**（core）：`tools`（工具定义）、`tool_instances`（服务发现）、`skills`/`rules`/`specs`（能力包）、`tool_metrics`（计量）、`audit_log`。
-- **Redis**（core）：注册表热副本、计量滑动窗口、限流。
+Persistence (base/core):
+- **PostgreSQL** (core): `tools` (tool definition), `tool_instances` (service discovery), `skills`/`rules`/`specs` (capability package), `tool_metrics` (measurement), `audit_log`.
+- **Redis** (core): registry hot copy, metering sliding window, rate limiting.
 
 ```sql
 CREATE TABLE tools (
@@ -209,99 +209,99 @@ CREATE TABLE tools (
 
 ---
 
-## 9. 并发与性能（goroutine / pool / 背压）
+## 9. Concurrency and performance (goroutine / pool / back pressure)
 
-- **框架**：Gin 处理管理/注册 API；`Resolve` 为热路径，可上 Hertz/go-zero（§15.6.1）。
-- **Goroutine**：每请求一 goroutine；工具代理调用（`invoke`）用 context 超时控制；计量经 `chan` + 后台 worker 异步落库。
-- **读多写少**：注册表热副本存 Redis + 本地 `sync.RWMutex` 保护的 `map`，注册/反注册时双写失效；`Resolve` 走本地缓存，毫秒级。
-- **背压**：工具实例并发上限用信号量；下游工具慢响应时超时即返回，不堆积 goroutine。
-- **无状态**：除可重建缓存外无本地状态，可水平扩缩。
+- **Framework**: Gin handles the management/registration API; `Resolve` is a hot path and can go to Hertz/go-zero (§15.5.1).
+- **Goroutine**: One goroutine per request; tool proxy call (`invoke`) is controlled by context timeout; metering is asynchronously dropped via `chan` + background worker.
+- **Read more and write less**: The hot copy of the registry is stored in Redis + local `sync.RWMutex` protected `map`, double-write fails during registration/unregistration; `Resolve` uses local cache, millisecond level.
+- **Backpressure**: Use semaphores to limit the concurrency of tool instances; when downstream tools respond slowly, they will time out and return without piling up goroutines.
+- **Stateless**: No local state except for rebuildable cache, and can be scaled horizontally.
 
 ---
 
-## 10. 关键时序图（Mermaid）
+## 10. Key sequence diagram (Mermaid)
 
 ```mermaid
 sequenceDiagram
-    participant A as Agent 运行时
+    participant A as Agent runtime
     participant TR as ai-tool-registry
     participant PG as PostgreSQL
-    participant R as Redis(热副本)
-    participant T as 工具实例(MCP)
+    participant R as Redis(hot copy)
+    participant T as Tool example(MCP)
 
     A->>TR: Resolve("order_lookup", tenant)
-    TR->>TR: 租户上下文 + RBAC 校验
-    TR->>R: 取 ToolDefinition 热副本
-    R-->>TR: 定义
-    TR->>TR: Schema 校验入参
-    TR->>R: 取健康实例(服务发现)
-    R-->>TR: 实例列表
-    TR->>T: 经 MCP Transport 调用
-    T-->>TR: 结果
-    TR->>TR: 出参 Schema 校验 + 计量
-    TR-->>A: ResolvedTool 结果
-    TR->>PG: 异步写 tool_metrics + audit
+    TR->>TR: Tenant context + RBAC check
+    TR->>R: Pick ToolDefinition hot copy
+    R-->>TR: definition
+    TR->>TR: Schema Verify input parameters
+    TR->>R: Take healthy example(service discovery)
+    R-->>TR: Instance list
+    TR->>T: through MCP Transport call
+    T-->>TR: result
+    TR->>TR: Take out the ginseng Schema check + Measurement
+    TR-->>A: ResolvedTool result
+    TR->>PG: Asynchronous writing tool_metrics + audit
 ```
 
 ---
 
-## 11. 配置与部署（含 K8s 资源/探针）
+## 11. Configuration and deployment (including K8s resources/probes)
 
-- **部署形态**：core，部署于 `ai-system` 命名空间（§9.2）；阶段一~三 Compose/K8s，随 standard 档点亮 Skills/Rules/Specs（profiles `optional_disabled` 控制）。
-- **资源**（参考）：requests cpu 250m / mem 256Mi；limits cpu 1 / mem 1Gi。
-- **探针**：存活 `GET /healthz`；就绪 `GET /healthz`（校验 PG/Redis）。`initialDelaySeconds: 5`，period `10s`。
-- **滚动更新**：多副本 + 探针保活（§13.3）。
-- **可选组件启停**：Skills/Rules/Specs 默认关（§10.2），由 `ai-system` 下配置 `skills.enabled=true` 等开启；启停不影响核心工具注册（核心路径不依赖能力包）。
-
----
-
-## 12. 可观测性 / 安全
-
-- **可观测性（§4.8）**：基础 OTel traces + 审计（core）；Prometheus（注册数、Resolve QPS、调用次数/延迟/成功率、Schema 校验失败率）。
-- **安全（§4.3.2 / §4.7.4）**：工具级 RBAC（API Key / OAuth2）；基础风控（限流）下沉 core；调用全量审计（core）。多用户场景推荐 Keycloak 接入（§4.7.3）。
+- **Deployment form**: core, deployed in the `ai-system` namespace (§9.2); Stages 1 to 3 of Compose/K8s, with the standard file turned on Skills/Rules/Specs (profiles `optional_disabled` control).
+- **Resources** (reference): requests cpu 250m / mem 256Mi; limits cpu 1 / mem 1Gi.
+- **Probe**: Alive `GET /healthz`; ready `GET /healthz` (check PG/Redis). `initialDelaySeconds: 5`, period `10s`.
+- **Rolling update**: multiple copies + probe keepalive (§13.3).
+- **Optional component start and stop**: Skills/Rules/Specs is turned off by default (§10.2), and can be turned on by configuring `skills.enabled=true` under `ai-system`; starting and stopping does not affect core tool registration (the core path does not depend on the capability package).
 
 ---
 
-## 13. 测试策略
+## 12. Observability / Security
 
-- **单元测试**：Schema 校验、RBAC 判定、服务发现选实例、版本兼容解析（领域层纯逻辑，§15.6.5）。
-- **SPI/契约测试**：MCP 三种 Transport Adapter 跑同一契约（注册→resolve→invoke→出参校验）。
-- **集成测试**：testcontainers 起 PG+Redis，验证注册/发现/计量落库。
-- **压测**：`Resolve` 热路径目标 p99 ≤ 5ms（本地缓存命中）；`invoke` 代理路径随下游工具。重点测高并发注册/反注册下热副本一致性。
+- **Observability (§4.8)**: Basic OTel traces + audit (core); Prometheus (number of registrations, Resolve QPS, number of calls/latency/success rate, Schema verification failure rate).
+- **Security (§4.3.2 / §4.7.4)**: Tool-level RBAC (API Key / OAuth2); basic risk control (rate limiting) pushed down to core; calling full audit (core). Keycloak access is recommended for multi-user scenarios (§4.7.3).
 
 ---
 
-## 14. 开放问题
+## 13. Testing strategy
 
-1. **能力包与 Component Registry 的关系**：Skills/Rules/Specs 是否纳入 §10.6 Component Registry 的统一实例元数据？还是仅在工具注册中心内管理？需与 `ai-platform-api` 对齐。
-2. **工具调用计量的归属**：工具调用延迟/成本是否并入 `ai-billing-service` 租户账单？还是仅内部指标？
-3. **代码类 Tool 的沙箱绑定时机**：注册时声明 `kind: code` 是否强制要求 `ai-sandbox-manager` 在线（§10.6 依赖规则）？弱依赖还是强依赖？
-4. **跨租户工具共享**：平台级公共工具（如天气查询）是否允许跨租户可见？需 RBAC 模型扩展。
-5. **MCP SSE/HTTP 的长连接治理**：大量 SSE 工具连接下的连接池与超时策略待定。
+- **Unit testing**: Schema verification, RBAC determination, service discovery instance selection, version compatibility analysis (domain layer pure logic, §15.5.5).
+- **SPI/Contract Test**: MCP three Transport Adapters run the same contract (register→resolve→invoke→parameter verification).
+- **Integration test**: testcontainers starts with PG+Redis, and verifies registration/discovery/measurement.
+- **Stress Test**: `Resolve` hot path target p99 ≤ 5ms (local cache hit); `invoke` proxy path depends on the downstream tool. Focus on measuring the consistency of hot replicas under concurrent registration/de-registration.
 
 ---
 
-## 变更记录
+## 14. Open questions
 
-| 版本 | 日期 | 作者 | 说明 |
+1. **Relationship between capability packages and Component Registry**: Are Skills/Rules/Specs included in the unified instance metadata of §10.6 Component Registry? Or is it only managed within the tool registry? Need to be aligned with `ai-platform-api`.
+2. **Attribution of tool call metering**: Are tool call delays/costs incorporated into the `ai-billing-service` tenant bill? Or just internal metrics?
+3. **Sandbox binding timing of code class Tool**: Declaring `kind: code` when registering is mandatory to require `ai-sandbox-manager` to be online (§10.6 Dependency Rules)? Weak dependence or strong dependence?
+4. **Cross-tenant tool sharing**: Are platform-level public tools (such as weather queries) allowed to be visible across tenants? Requires RBAC model extensions.
+5. **MCP SSE/HTTP long connection management**: The connection pool and timeout strategy for a large number of SSE tool connections are to be determined.
+
+---
+
+## Change record
+
+| Version | Date | Author | Description |
 | --- | --- | --- | --- |
-| v0.1 | 2026-07-17 | OpenStrata 架构组 | 初稿（覆盖占位骨架，14 节完整） |
+| v0.1 | 2026-07-17 | OpenStrata Architecture Group | First draft (covering the placeholder skeleton, complete with 14 sections) |
 
-## 追溯矩阵（本文档章节 ↔ 架构设计文档 § 编号）
+## Traceability Matrix (Chapter of this document ↔ Architecture Design Document § Number)
 
-| 章节 | 对应架构 § |
+| Chapter | Corresponding Architecture § |
 | --- | --- |
-| 1 定位与边界 | §4.3.2, §7, §10.2, §15.6 |
-| 2 职责清单 | §4.3.2, §7.2–7.4 |
-| 3 核心抽象与接口 | §4.3.2, §4.3.5, §10.3 |
-| 4 处理流水线 | §4.3.2, §4.3.5 |
-| 5 关键算法 | §4.3.2, §7.2–7.4, §10.6 |
-| 6 外部适配 | §4.3.2, §10.3, §10.4, §10.6, §16 |
-| 7 API/CLI/配置 | §4.3.2, §7, §12 |
-| 8 数据模型 | §4.8, §16(base) |
-| 9 并发与性能 | §15.6.1, §15.6.5 |
-| 10 时序图 | §4.3.2, §15.6.2.2 |
-| 11 配置部署 | §9.2, §12.2, §13.3 |
-| 12 可观测性/安全 | §4.3.2, §4.7.3, §4.7.4, §4.8 |
-| 13 测试策略 | §15.6.5 |
-| 14 开放问题 | §7, §10.6 |
+| 1 Positioning and Boundaries | §4.3.2, §7, §10.2, §15.5 |
+| 2 Responsibilities List | §4.3.2, §7.2–7.4 |
+| 3 Core abstractions and interfaces | §4.3.2, §4.3.5, §10.3 |
+| 4 Processing Pipeline | §4.3.2, §4.3.5 |
+| 5 Key Algorithms | §4.3.2, §7.2–7.4, §10.6 |
+| 6 External adaptation | §4.3.2, §10.3, §10.4, §10.6, §16 |
+| 7 API/CLI/Configuration | §4.3.2, §7, §12 |
+| 8 Data Model | §4.8, §16(base) |
+| 9 Concurrency and Performance | §15.5.1, §15.5.5 |
+| 10 Timing diagram | §4.3.2, §15.5.2.2 |
+| 11 Configuration Deployment | §9.2, §12.2, §13.3 |
+| 12 Observability/Security | §4.3.2, §4.7.3, §4.7.4, §4.8 |
+| 13 Testing Strategy | §15.5.5 |
+| 14 Open Questions | §7, §10.6 |
