@@ -273,7 +273,7 @@ sequenceDiagram
 
 ## 14. Open questions
 
-1. **Relationship between capability packages and Component Registry**: Are Skills/Rules/Specs included in the unified instance metadata of §10.6 Component Registry? Or is it only managed within the tool registry? Need to be aligned with `ai-platform-api`.
+1. **Relationship between capability packages and Component Registry** — **✅ Resolved**: Skills/Rules/Specs are *managed within* `ai-tool-registry` (the single management surface, ARCH §1.1) and *referenced* by the §10.6 Component Registry / `AgentSpec` via `skill_ref` / `rule_ref` / `spec_ref` pointers (semantic-version resolved at bind time, DESIGN §5.4). They are **not** duplicated into Component Registry instance metadata. The canonical (and only) writer of capability packages is `ai-srs-service` (`SkillRegistryPort` → `SkillPublished` event); `ai-tool-registry` is a passive sink. `Agent-resolve` is a read path only for capability packages. See ARCH §1.7.
 2. **Attribution of tool call metering**: Are tool call delays/costs incorporated into the `ai-billing-service` tenant bill? Or just internal metrics?
 3. **Sandbox binding timing of code class Tool**: Declaring `kind: code` when registering is mandatory to require `ai-sandbox-manager` to be online (§10.6 Dependency Rules)? Weak dependence or strong dependence?
 4. **Cross-tenant tool sharing**: Are platform-level public tools (such as weather queries) allowed to be visible across tenants? Requires RBAC model extensions.

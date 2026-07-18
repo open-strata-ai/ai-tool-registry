@@ -53,6 +53,44 @@ Converge "tools (DB/API/file/code/search/business) scattered everywhere" and "pl
 | **No model calling** | Model calling is the responsibility of `ai-gateway-core` |
 | **No tenant settlement** | Metering data is reported to `ai-billing-service`, which is responsible for settlement |
 
+### 1.7 Upstream dependencies (who calls this service)
+
+`ai-tool-registry` is a **sink** for registration and a **source** for `Resolve`. The
+services below call into it. (The Go peer components in §1.5 — `ai-gateway-core`,
+`ai-sandbox-manager`, `ai-platform-api` — are also listed here where they are *writers*.)
+
+| Upstream | Interface / port | Direction | What it does | Canonical? |
+| --- | --- | --- | --- | --- |
+| **Agent runtime** (Agent Engine) | `ToolRegistry` SPI → `POST /v1/tools/{name}/resolve` | **Read** (hot path) | Resolves a tool/skill at call time; does **not** author capability packages | n/a (read-only) |
+| **`ai-srs-service`** | `SkillRegistryPort` (REST, MCP Tool Schema) | **Write** | Broadcasts published `Skill` / `Rule` / `Spec` packages into the registry on the `SkillPublished` event (§7.2–7.4) | **Canonical writer of Skill/Rule/Spec** |
+| **`ai-platform-api`** | `AppRegistryPort` (REST fan-out) | **Write** | Registers `Application` ↔ Tool bindings; `ApplicationRegistered` event fans out to this registry | Canonical for Application-owned tools |
+| **`ai-cli` (`aictl`)** | Registry REST API | **Write + Read** | `aictl registry push` / query for admin & CI pipelines | Canonical for manual / CI registration |
+| **`ai-sdk-go` / `ai-sdk-java`** | `Tool` abstraction → `ToolRegistry` SPI | **Write + Read** | SDK users register custom Tools (MCP stdio/SSE/HTTP) to the platform registry | Canonical for SDK-authored tools |
+| **`ai-dependency-resolver`** | Assembly graph only | **None** (build-time reference) | Uses this repo as an *assembly unit* to analyze dependency rules (§10.6); never calls its runtime | n/a |
+
+> **Reciprocity note**: `ai-srs-service/docs/ARCH.md` §4.3.2 / `DESIGN.md` §7.2 already
+> document this relationship from the SRS side (`SkillRegistryPort` → `ai-tool-registry`).
+> The table above is the mirror view, owned by this repository.
+
+**Canonical write path for capability packages (resolves the §14 open question #1):**
+
+- `Skill` / `Rule` / `Spec` packages are *authored and versioned* in `ai-srs-service`.
+  The **canonical (and only) writer** of these into `ai-tool-registry` is
+  `ai-srs-service`'s `SkillRegistryPort.broadcast()`, triggered by the `SkillPublished`
+  event. `ai-tool-registry` is a **passive sink** for them — it never originates a
+  capability package.
+- **Agent-resolve is a read path only** for capability packages: the Agent calls
+  `Resolve` to look up a skill at call time; it does **not** publish/author
+  Skill/Rule/Spec. (The SRS sequence diagram's `AGENT->>TR: Registration tool` step
+  refers to the Agent registering a *plain Tool* it owns via the `ToolRegistry`
+  `Register` SPI — distinct from the capability-package broadcast. Both are valid but
+  target different entity kinds: Tools vs Skill/Rule/Spec.)
+- **Relationship to §10.6 Component Registry**: Skills/Rules/Specs are *managed within*
+  `ai-tool-registry` (the single management surface, §1.1) and *referenced* by the
+  Component Registry / `AgentSpec` via `skill_ref` / `rule_ref` / `spec_ref` pointers
+  (semantic-version resolved at bind time, §5.4). They are **not** duplicated into
+  Component Registry instance metadata → managed here, referenced elsewhere.
+
 ---
 
 ## §2 Responsibilities List
