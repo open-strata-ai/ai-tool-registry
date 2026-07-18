@@ -4,7 +4,7 @@
 > **Language · Framework**: Go · Gin + Cobra + Wire (DDD four layers; hot path can be Hertz/go-zero)
 > **Field**: agent-infra (Agent infrastructure layer · Tool registration center)
 > **optional**: false (core · core, the core of the Agent calling tool)
-> **Platform version**: v1.4.0
+> **Platform version**: v1.0.0
 > **Document Status**: Draft
 > **Responsible Person**: OpenStrata Architecture Group
 > **Associated links**: This repository [arch/ARCH.md](../../arch/ARCH.md) · [skills/SKILLS.md](../../skills/SKILLS.md) · [specs/SPECS.md](../../specs/SPECS.md); Architecture design document §4.3.2 (Tool Registration Center) · §7 (Skills/Rules/Specs Management) · §4.3.5 (AgentSpec Tool Binding) · §10.3 (ToolRegistry SPI) · §10.6 (Component Registry) · §15.5 (DDD Layering) · §16 (BOM)
@@ -136,7 +136,7 @@ Tool instances are registered in the registry (or connected to K8s Endpoints) wi
 | SPI port | Role of this repository | External components | Default ✅ / Alternative | Adapter |
 | --- | --- | --- | --- | --- |
 | `ToolRegistry` | Implementer | This repository itself (no external SPI instance, self-developed port of the platform) | — | MCP protocol access (stdio/SSE/HTTP) |
-| `VectorStore` (1.1.0) | Consumer (optional) | Qdrant (core) / Milvus (optional) | ✅ / Alternative | Tool semantic retrieval/tag vectorization (optional enhancement) |
+| `VectorStore` (1.0.0) | Consumer (optional) | Qdrant (core) / Milvus (optional) | ✅ / Alternative | Tool semantic retrieval/tag vectorization (optional enhancement) |
 | `Cache` (1.0.0) | Consumer | Redis (core) / Valkey (optional) | ✅ / Alternative | Registry hot copy, metering count |
 | `Auth` (1.0.0) | Consumer | Keycloak (core) | ✅ | Tenant/User Identity |
 | `Sandbox` (1.0.0) | Indirect dependency | Kata/E2B (optional) | Alternative | Code class Tool runs through `SandboxExecutor` (§10.6 Dependency rules) |

@@ -4,7 +4,7 @@
 > **Language · Framework**: Go · Gin + Cobra + Wire (DDD four layers; hot path can be Hertz/go-zero)
 > **Field**: agent-infra (Agent infrastructure layer · Tool registration center)
 > **optional**: false (core · core; the core of the Agent calling tool)
-> **Platform version**: v1.4.0
+> **Platform version**: v1.0.0
 
 ---
 
@@ -211,7 +211,7 @@ Agent runtime → Resolve(name, tenant) → Tenant context + RBAC check
 | SPI port | Role of this repository | External component (bom.yaml) | Default ✅ / Alternative | Adapter |
 | --- | --- | --- | --- | --- |
 | `ToolRegistry` | Implementer | This repository itself (no external SPI instance, self-developed port of the platform) | — | MCP protocol access (stdio/SSE/HTTP) |
-| `VectorStore` (1.1.0) | Consumer (optional) | Qdrant (core) / Milvus (optional) | ✅ / Alternative | Tool semantic retrieval/tag vectorization (optional enhancement) |
+| `VectorStore` (1.0.0) | Consumer (optional) | Qdrant (core) / Milvus (optional) | ✅ / Alternative | Tool semantic retrieval/tag vectorization (optional enhancement) |
 | `Cache` (1.0.0) | Consumer | Redis (core) / Valkey (optional) | ✅ / Alternative | Registry hot copy, metering count |
 | `Auth` (1.0.0) | Consumer | Keycloak (core) | ✅ | Tenant/User JWT Identity Verification |
 | `Sandbox` (1.0.0) | Indirect dependency | Kata/E2B (optional) | Alternative | Code class Tool runtime is hosted by `SandboxExecutor` |
